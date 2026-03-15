@@ -1,13 +1,11 @@
-import { CodexBase } from "./CodexBase";
-
 const textDecoder = new TextDecoder();
 
-export class CodexJson extends CodexBase<object, string> {
-    public encode(payload): TransportPayload {
+export class CodexJson implements ICodex<object, string> {
+    public encode(payload): SocketChannelPayload {
         return JSON.stringify(payload);
     }
 
-    public decode(payload): string {
+    public decode(payload: SocketChannelPayload): string {
         if (typeof payload === "string") return JSON.parse(payload);
         if (payload instanceof Uint8Array) return textDecoder.decode(payload);
         if (payload instanceof ArrayBuffer) return textDecoder.decode(new Uint8Array(payload));

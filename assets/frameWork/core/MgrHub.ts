@@ -1,5 +1,5 @@
 import { EventMgr } from "../event/EventMgr";
-import { NetMgr } from "../net/NetMgr";
+import { NetMgr } from "../netExt/NetMgr";
 import { ResMgr } from "../res/ResMgr";
 import { UIMgr } from "../ui/UIMgr";
 import { IMgr } from "./MgrBase";
@@ -53,3 +53,4 @@ export class MgrHub {
     }
 
 }
+

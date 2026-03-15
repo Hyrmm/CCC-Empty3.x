@@ -1,4 +1,4 @@
-export const TransportState = {
+export const SocketChannelState = {
     Idle: "idle",
     Connecting: "connecting",
     Open: "open",
@@ -7,24 +7,25 @@ export const TransportState = {
 } as const;
 
 declare global {
-    type TransportPayload = string | ArrayBuffer | Uint8Array;
-    type TransportState = typeof TransportState[keyof typeof TransportState];
+    type SocketChannelPayload = string | ArrayBuffer | Uint8Array;
+    type SocketChannelState = typeof SocketChannelState[keyof typeof SocketChannelState];
 
-    interface SocketChannel<TSend = unknown, TReceive = unknown> {
-        readonly key: string;
-        readonly state: TransportState;
-        connect(): Promise<void>;
-        send(payload: TSend): Promise<void>;
-        close(code?: number, reason?: string): void;
-        setEvents(events: SocketChannelEvents<TReceive>): SocketChannel<TSend, TReceive>;
-    }
-
-    interface SocketChannelEvents<TReceive = unknown> {
+    type SocketChannelEvents<TReceive = unknown> = {
         onOpen?: () => void;
         onClose?: (ev?: { code?: number; reason?: string; wasClean?: boolean }) => void;
         onError?: (error: unknown) => void;
-        onMessage?: (payload: TReceive, raw: TransportPayload) => void;
+        onMessage?: (payload: TReceive, raw: SocketChannelPayload) => void;
+    }
+
+    type SocketChannelParams<TSend, TReceive> = {
+        key: string;
+        url: string;
+        codec: ICodex<TSend, TReceive>;
+        events?: SocketChannelEvents<TReceive>;
+    }
+
+    interface ICodex<TSend, TReceive> {
+        encode(payload: TSend): SocketChannelPayload;
+        decode(payload: SocketChannelPayload): TReceive;
     }
 }
-
-export { };
