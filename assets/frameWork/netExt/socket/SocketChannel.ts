@@ -8,7 +8,7 @@ export class SocketChannel<TSend, TReceive> {
 
     private events: SocketChannelEvents<TReceive> = {};
     private socket: WebSocket;
-    private connectTask: Promise<void>;
+    private connectTask: Promise<void> | null = null;
 
     public state: SocketChannelState = SocketChannelState.Idle;
 
@@ -34,14 +34,14 @@ export class SocketChannel<TSend, TReceive> {
             const resolveOnce = () => {
                 if (settled) return;
                 settled = true;
-                this.connectTask = undefined;
+                this.connectTask = null;
                 resolve();
             };
 
             const rejectOnce = (error: unknown) => {
                 if (settled) return;
                 settled = true;
-                this.connectTask = undefined;
+                this.connectTask = null;
                 reject(error);
             };
 
@@ -55,17 +55,15 @@ export class SocketChannel<TSend, TReceive> {
             socket.onclose = (ev) => {
                 if (this.socket !== socket) return;
 
-                this.socket = undefined;
+                this.socket = null;
                 this.state = SocketChannelState.Closed;
                 this.events.onClose?.({
                     code: ev.code,
                     reason: ev.reason,
                     wasClean: ev.wasClean,
                 });
-
-                if (!settled) {
-                    rejectOnce(new Error(`WebSocket closed before open (code=${ev.code}, reason=${ev.reason || "unknown"})`));
-                }
+                void this.onClose(ev);
+                rejectOnce(new Error(`WebSocket closed before open (code=${ev.code}, reason=${ev.reason || "unknown"})`));
             };
 
             socket.onerror = (error) => {
@@ -101,7 +99,7 @@ export class SocketChannel<TSend, TReceive> {
         }
 
         if (socket.readyState === WebSocket.CLOSED) {
-            this.socket = undefined;
+            this.socket = null;
             this.state = SocketChannelState.Closed;
             return;
         }
@@ -115,6 +113,10 @@ export class SocketChannel<TSend, TReceive> {
         this.events = {};
 
         socket.close(code, reason);
+    }
+
+    private onClose(ev: CloseEvent): void {
+
     }
 
     private onMessage(raw: SocketChannelPayload): void {
