@@ -62,7 +62,6 @@ export class SocketChannel<TSend, TReceive> {
                     reason: ev.reason,
                     wasClean: ev.wasClean,
                 });
-                void this.onClose(ev);
                 rejectOnce(new Error(`WebSocket closed before open (code=${ev.code}, reason=${ev.reason || "unknown"})`));
             };
 
@@ -113,10 +112,6 @@ export class SocketChannel<TSend, TReceive> {
         this.events = {};
 
         socket.close(code, reason);
-    }
-
-    private onClose(ev: CloseEvent): void {
-
     }
 
     private onMessage(raw: SocketChannelPayload): void {
