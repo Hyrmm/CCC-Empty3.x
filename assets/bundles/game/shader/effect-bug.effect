@@ -1,0 +1,160 @@
+// Effect Syntax Guide: https://docs.cocos.com/creator/manual/zh/shader/index.html
+
+CCEffect %{
+  techniques:
+  - name: opaque
+    passes:
+    - vert: unlit-vs:vert
+      frag: unlit-fs:frag
+      properties: &props
+        mainTexture: &mainTextureProperty
+          value: white
+        alphaThreshold: &alphaThresholdProperty
+          value: 0.5
+          editor: { parent: USE_ALPHA_TEST }
+    - vert: planar-shadow-vs:vert
+      frag: planar-shadow-fs:frag
+      switch: PLANAR_SHADOW
+      properties:
+        mainTexture: *mainTextureProperty
+        alphaThreshold: *alphaThresholdProperty
+        shadowColor: {value: [0.5, 0.5, 0.5, 1.0], editor: { type: color }}
+        planarNDInfo: { value: [0, 0, 1, 0], editor: { type: vec4 } }
+  - name: transparent
+    passes:
+    - vert: unlit-vs:vert
+      frag: unlit-fs:frag
+      blendState:
+        targets:
+        - blend: true
+          blendSrc: src_alpha
+          blendDst: one_minus_src_alpha
+          blendSrcAlpha: src_alpha
+          blendDstAlpha: one_minus_src_alpha
+      properties: *props
+}%
+
+CCProgram unlit-vs %{
+  precision highp float;
+  #include <legacy/input>
+  #include <builtin/uniforms/cc-global>
+  #include <legacy/decode-base>
+  #include <legacy/local-batch>
+
+  #if USE_INSTANCING
+    in vec4 uvRect;
+    in vec4 wiggleMeta0;
+    in vec4 wiggleMeta1;
+    in vec4 wiggleMeta2;
+  #endif
+
+  out vec2 v_uv;
+  out vec3 v_position;
+
+  float smoothRange(float value, float minValue, float maxValue, float feather) {
+    return smoothstep(minValue - feather, minValue + feather, value)
+      * (1.0 - smoothstep(maxValue - feather, maxValue + feather, value));
+  }
+
+  float applyHold(float wave, float holdAmount) {
+    if (wave <= 0.0 || holdAmount <= 0.0) {
+      return wave;
+    }
+
+    float holdStrength = clamp(holdAmount * 2.5, 0.0, 0.8);
+    return mix(wave, 1.0, holdStrength * wave);
+  }
+
+  vec4 applyBugWiggle(vec4 position) {
+    #if USE_INSTANCING
+      float phase = cc_time.x * wiggleMeta0.x + wiggleMeta0.w;
+      float rawWave = sin(phase * 6.28318530718);
+      float wave = applyHold(rawWave, wiggleMeta0.z);
+      vec2 centeredUv = a_texCoord * 2.0 - vec2(1.0, 1.0);
+
+      float minExtent = min(wiggleMeta2.x, wiggleMeta2.y);
+      float maxExtent = max(wiggleMeta2.x, wiggleMeta2.y);
+      float axisDominance = max(abs(wiggleMeta1.x), abs(wiggleMeta1.y));
+      float sampleCoord = abs(wiggleMeta1.z) > axisDominance
+        ? abs(centeredUv.x)
+        : clamp(centeredUv.x * wiggleMeta1.x + centeredUv.y * wiggleMeta1.y, -1.0, 1.0);
+
+      float activeMask = smoothRange(sampleCoord, minExtent, maxExtent, 0.18);
+      float wingMask = smoothstep(0.16, 0.9, abs(centeredUv.x)) * activeMask;
+      float bodyMask = (1.0 - smoothstep(0.1, 0.42, abs(centeredUv.x))) * activeMask;
+
+      if (wiggleMeta2.z > 0.5) {
+        float flap = wave * wiggleMeta0.y;
+        float folded = abs(flap);
+        position.x += position.x * flap * wingMask * 0.9;
+        position.y -= abs(position.y) * folded * wingMask * 0.35;
+        position.x += sign(centeredUv.x) * folded * wingMask * 0.025 * wiggleMeta1.w;
+      } else {
+        float breathe = wave * wiggleMeta0.y;
+        float chest = mix(0.45, 1.0, bodyMask);
+        position.y += position.y * breathe * (0.75 + chest * 0.5) * activeMask;
+        position.x -= position.x * breathe * (0.15 + chest * 0.25) * activeMask;
+        position.x += centeredUv.x * rawWave * wiggleMeta2.w * activeMask;
+        position.y += abs(centeredUv.x) * abs(rawWave) * wiggleMeta2.w * 0.6 * activeMask;
+      }
+    #endif
+
+    return position;
+  }
+
+  vec4 vert () {
+    
+    vec4 position;
+    CCVertInput(position);
+    position = applyBugWiggle(position);
+
+    mat4 matWorld;
+    CCGetWorldMatrix(matWorld);
+
+    #if USE_INSTANCING
+      v_uv = mix(uvRect.xy, uvRect.zw, a_texCoord);
+    #else
+      v_uv = a_texCoord;
+    #endif
+
+    v_position = (matWorld * position).xyz;
+    return cc_matProj * cc_matView * matWorld * position;
+  }
+}%
+
+CCProgram unlit-fs %{
+  precision highp float;
+  #include <legacy/output>
+
+  uniform sampler2D mainTexture;
+
+  #if USE_ALPHA_TEST
+    uniform Constant {
+      float alphaThreshold;
+    };
+  #endif
+
+
+  in vec2 v_uv;
+  in vec3 v_position;
+
+  vec4 frag () {
+    vec4 col = texture(mainTexture, v_uv);
+
+    #if USE_ALPHA_TEST
+      if(alphaThreshold > 0.0 && col.a < alphaThreshold) {
+        discard;
+      }
+    #endif
+
+    return CCFragOutput(col);
+  }
+}%
+
+CCProgram planar-shadow-vs %{
+  #include <chunks/planar-shadow-vs>
+}%
+
+CCProgram planar-shadow-fs %{
+  #include <chunks/planar-shadow-fs>
+}%

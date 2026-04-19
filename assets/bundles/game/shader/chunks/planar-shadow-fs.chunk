@@ -1,0 +1,39 @@
+precision highp float;
+#include <legacy/output>
+#include <builtin/uniforms/cc-global>
+
+#if USE_ALPHA_TEST
+  uniform Constant {
+    float alphaThreshold;
+  };
+#endif
+
+
+in vec2 v_uv;
+in float v_dist;
+
+uniform Shadow {
+  vec4 shadowColor;
+};
+
+uniform sampler2D mainTexture;
+
+vec4 frag () {
+  if(v_dist < 0.0){
+    discard;
+  }
+    
+
+  #if USE_ALPHA_TEST
+
+    vec4 col = texture(mainTexture, v_uv);
+
+    if(alphaThreshold > 0.0 && col.a < alphaThreshold) {
+      discard;
+    }
+  #endif
+
+  vec4 color = shadowColor.xyzw;
+  color.rgb *= cc_mainLitColor.rgb;
+  return color;
+}
